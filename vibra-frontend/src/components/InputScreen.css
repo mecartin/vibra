@@ -1,0 +1,345 @@
+.input-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  width: 100%;
+  max-width: 90vw;
+  height: 100vh;
+  position: relative;
+  z-index: 5;
+  justify-content: center;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .input-screen {
+    padding: 1rem;
+    justify-content: space-evenly;
+  }
+}
+
+.texture-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    repeating-conic-gradient(
+      from 0deg at 50% 50%,
+      rgba(255, 0, 255, 0.02) 0deg,
+      transparent 1deg,
+      transparent 2deg,
+      rgba(255, 0, 255, 0.02) 3deg
+    );
+  pointer-events: none;
+  z-index: 4;
+  mix-blend-mode: multiply;
+}
+
+.scan-lines {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    transparent 50%,
+    rgba(255, 0, 255, 0.03) 51%,
+    transparent 52%
+  );
+  background-size: 100% 4px;
+  animation: scan 7.5s linear infinite;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.rgb-split {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 6;
+  animation: rgb-shift 8s infinite;
+  opacity: 0.1;
+}
+
+@keyframes rgb-shift {
+  0%, 100% { 
+    background: none;
+  }
+  25% {
+    background: linear-gradient(90deg, 
+      rgba(255, 0, 0, 0.1) 0%, 
+      transparent 33%, 
+      rgba(0, 255, 0, 0.1) 66%, 
+      rgba(0, 0, 255, 0.1) 100%
+    );
+  }
+  50% {
+    background: linear-gradient(90deg, 
+      rgba(0, 0, 255, 0.1) 0%, 
+      rgba(255, 0, 0, 0.1) 33%, 
+      transparent 66%, 
+      rgba(0, 255, 0, 0.1) 100%
+    );
+  }
+  75% {
+    background: linear-gradient(90deg, 
+      rgba(0, 255, 0, 0.1) 0%, 
+      rgba(0, 0, 255, 0.1) 33%, 
+      rgba(255, 0, 0, 0.1) 66%, 
+      transparent 100%
+    );
+  }
+}
+
+@keyframes scan {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(20px); }
+}
+
+.heart-icon {
+  margin-bottom: 1.5rem;
+  cursor: pointer;
+  transition: filter 0.3s;
+  position: relative;
+}
+
+.heart-icon:hover {
+  filter: drop-shadow(0 0 5px #FF00FF);
+}
+
+.logo {
+  font-size: clamp(3rem, 10vw, 4rem);
+  font-weight: normal;
+  margin: 0;
+  margin-bottom: 0.5rem;
+  position: relative;
+}
+
+.glitch-text {
+  position: relative;
+  display: inline-block;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.glitch-text::before {
+  animation: glitch-1 0.5s infinite;
+  color: #00ffff;
+  z-index: -1;
+}
+
+.glitch-text::after {
+  animation: glitch-2 0.5s infinite;
+  color: #ff00ff;
+  z-index: -2;
+}
+
+@keyframes glitch-1 {
+  0%, 100% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0);
+  }
+  20% {
+    clip-path: inset(20% 0 60% 0);
+    transform: translate(-2px, 2px);
+  }
+  40% {
+    clip-path: inset(40% 0 40% 0);
+    transform: translate(2px, -2px);
+  }
+  60% {
+    clip-path: inset(60% 0 20% 0);
+    transform: translate(-2px, -2px);
+  }
+  80% {
+    clip-path: inset(80% 0 0 0);
+    transform: translate(2px, 2px);
+  }
+}
+
+@keyframes glitch-2 {
+  0%, 100% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0);
+  }
+  20% {
+    clip-path: inset(80% 0 0 0);
+    transform: translate(2px, -2px);
+  }
+  40% {
+    clip-path: inset(60% 0 20% 0);
+    transform: translate(-2px, 2px);
+  }
+  60% {
+    clip-path: inset(40% 0 40% 0);
+    transform: translate(2px, 2px);
+  }
+  80% {
+    clip-path: inset(20% 0 60% 0);
+    transform: translate(-2px, -2px);
+  }
+}
+
+.tagline {
+  font-size: clamp(0.9rem, 2.5vw, 1rem);
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 2rem;
+  letter-spacing: 2px;
+}
+
+.input-container {
+  width: 100%;
+  max-width: 400px;
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.input-box {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid #FF00FF;
+  border-radius: 0;
+  padding: 1rem;
+  color: #fff;
+  font-size: clamp(0.9rem, 2.5vw, 1rem);
+  font-family: 'Cascadia Code', monospace;
+  resize: none;
+  position: relative;
+  transition: all 0.3s;
+  box-shadow: 
+    0 0 10px rgba(255, 0, 255, 0.2),
+        inset 0 0 10px rgba(255, 0, 255, 0.1);
+}
+
+.input-border-glow {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, #FF00FF, #00FFFF, #FF00FF);
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s;
+  filter: blur(5px);
+}
+
+.input-box:focus {
+  outline: none;
+  border-color: #00FF00;
+  box-shadow: 
+    0 0 15px rgba(0, 255, 0, 0.3),
+    inset 0 0 10px rgba(0, 255, 0, 0.1);
+}
+
+.input-box:focus + .input-border-glow {
+  opacity: 0.5;
+}
+
+.input-box::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.submit-button {
+  background: transparent;
+  color: #00FF00;
+  border: 2px solid #00FF00;
+  padding: 0.75rem 3rem;
+  font-size: clamp(0.9rem, 2.5vw, 1rem);
+  font-weight: bold;
+  font-family: 'Cascadia Code', monospace;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-transform: lowercase;
+  letter-spacing: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.button-text {
+  position: relative;
+  z-index: 2;
+}
+
+.button-glitch {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.submit-button:hover .button-glitch {
+  opacity: 1;
+  animation: button-glitch 0.3s infinite;
+}
+
+@keyframes button-glitch {
+  0% {
+    transform: translate(0);
+    filter: hue-rotate(0deg);
+  }
+  20% {
+    transform: translate(-2px, 2px);
+    filter: hue-rotate(90deg);
+  }
+  40% {
+    transform: translate(-2px, -2px);
+    filter: hue-rotate(180deg);
+  }
+  60% {
+    transform: translate(2px, 2px);
+    filter: hue-rotate(270deg);
+  }
+  80% {
+    transform: translate(2px, -2px);
+    filter: hue-rotate(360deg);
+  }
+  100% {
+    transform: translate(0);
+    filter: hue-rotate(0deg);
+  }
+}
+
+/* Mobile specific styles */
+@media (max-width: 768px) {
+  .heart-icon {
+    margin-bottom: 1rem;
+  }
+  
+  .logo {
+    margin-bottom: 0.3rem;
+  }
+  
+  .tagline {
+    margin-bottom: 1.5rem;
+  }
+  
+  .input-box {
+    padding: 0.8rem;
+  }
+  
+  .submit-button {
+    padding: 0.6rem 2rem;
+  }
+}
