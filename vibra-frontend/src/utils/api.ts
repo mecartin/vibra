@@ -98,3 +98,36 @@ export const removeFavorite = async (id: string, token: string) => {
         headers: { Authorization: `Bearer ${token}` }
     });
 };
+
+export const getSpotifyRecommendations = async (mood: string, limit: number, userInput: string) => {
+  const token = localStorage.getItem('authToken');
+  const response = await fetch('/api/spotify/recommendations', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    // Add userInput to the body so the backend can use it
+    body: JSON.stringify({ mood, limit, userInput }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to fetch recommendations');
+  }
+  return response.json();
+};
+
+export const createSpotifyPlaylist = async (playlistName: string, trackUris: string[]) => {
+  const token = localStorage.getItem('authToken');
+  const response = await fetch('/api/spotify/create-playlist', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ playlistName, trackUris }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to create playlist');
+  }
+  return response.json();
+};

@@ -1,99 +1,97 @@
 const express = require('express');
-const axios = require('axios');
 const router = express.Router();
+const axios = require('axios');
+const authMiddleware = require('../middleware/auth');
+const User = require('../models/User');
+const Feedback = require('../models/Feedback');
 
-// Emoji & slang shortcut mapping
-const emojiRules = {
-  "😂": "joy", "🤣": "joy", "😄": "joy", "😃": "joy", "😊": "joy",
-  "😍": "love", "❤️": "love", "🥰": "love",
-  "😭": "sadness", "😢": "sadness", "😩": "sadness", "😔": "sadness",
-  "😱": "surprise", "😯": "surprise", "😲": "surprise",
-  "😡": "anger", "🤬": "anger",
-  "😨": "fear", "😰": "fear"
-};
+const ML_SERVER_URL = process.env.ML_SERVER_URL || 'http://localhost:5001';
 
-const slangMap = {
-  "lit": "joy", "vibe": "joy", "buzzkill": "sadness", "goat": "love",
-  "yeet": "surprise", "bet": "joy", "slay": "joy", "sus": "fear", "smh": "sadness"
-};
-
-function preprocessInput(input) {
-  let processed = input;
-  for (const emo in emojiRules) {
-    if (processed.includes(emo)) {
-      processed = processed.split(emo).join(" " + emojiRules[emo] + " ");
-    }
-  }
-  return processed;
-}
-
-function fastDetect(input) {
-  input = input.trim();
-  if (emojiRules[input]) return emojiRules[input];
-  for (const word in slangMap) {
-    if (input.toLowerCase().includes(word)) return slangMap[word];
-  }
-  return null;
-}
-
-function flattenScores(respData) {
-  let data = respData;
-  // Keep unwrapping arrays until the first element has a .label
-  while (Array.isArray(data) && data[0] && Array.isArray(data[0])) {
-    data = data[0];
-  }
-  return data;
-}
-
-router.post('/analyze', async (req, res) => {
-  const { input } = req.body;
-  // Emoji/slang shortcut:
-  const fastMood = fastDetect(input);
-  if (fastMood) {
-    const moods = ["joy", "love", "surprise", "sadness", "fear", "anger", "optimism"];
-    const scores = moods.map(label => ({
-      label,
-      score: label === fastMood ? 1.0 : 0.0
-    }));
-    return res.json({
-      primary: { label: fastMood, score: 1.0 },
-      secondary: scores[1],
-      allScores: scores,
-      method: "emoji_or_slang"
-    });
-  }
-  const cleanText = preprocessInput(input);
-  try {
-    const resp = await axios.post('http://127.0.0.1:5001/analyze', { text: cleanText });
-
-    let scores = flattenScores(resp.data);
-
-    if (!Array.isArray(scores) || !scores.length || !scores[0].label) {
-      console.error('Unexpected ML server data:', resp.data);
-      return res.status(500).json({ error: "Unexpected ML response structure", data: resp.data });
+// --- Main Analysis Route ---
+// POST /api/mood/analyze
+router.post('/analyze', authMiddleware, async (req, res) => {
+    const { text } = req.body;
+    if (!text) {
+        return res.status(400).json({ success: false, error: 'Text input is required' });
     }
 
-    const sorted = scores.filter(x => x && x.label && typeof x.score === "number")
-      .sort((a, b) => b.score - a.score);
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
 
-    if (!sorted.length) {
-      console.error('After filtering, no valid score found:', scores);
-      return res.status(500).json({ error: "No valid emotion scores." });
+        // Prepare data for the ML server
+        const payload = {
+            text: text,
+            history: user.inputHistory || [],
+            user_bias: user.emotionBiases || {},
+        };
+
+        const { data } = await axios.post(`${ML_SERVER_URL}/analyze`, payload);
+
+        // Update user's input history (keep the last 5 entries)
+        user.inputHistory.push(text);
+        if (user.inputHistory.length > 5) {
+            user.inputHistory.shift();
+        }
+        await user.save();
+
+        res.status(200).json({ success: true, ...data });
+
+    } catch (error) {
+        console.error('Error contacting ML server:', error.message);
+        res.status(500).json({ success: false, error: 'Error analyzing mood' });
     }
-
-    const confidenceWarning = (sorted[0].score < 0.6 || (sorted[0].score - (sorted[1]?.score || 0)) < 0.2);
-
-    res.json({
-      primary: sorted[0],
-      secondary: sorted[1] || null,
-      allScores: sorted,
-      confidenceWarning,
-      method: "ml_model"
-    });
-  } catch (err) {
-    console.error('ML analyze failed:', err.message, err.response?.data || '');
-    res.status(500).json({ error: "Mood detection error.", details: err.message });
-  }
 });
+
+
+// --- New Feedback Route ---
+// POST /api/mood/feedback
+router.post('/feedback', authMiddleware, async (req, res) => {
+    const { originalText, incorrectEmotion, correctEmotion } = req.body;
+
+    if (!originalText || !incorrectEmotion || !correctEmotion) {
+        return res.status(400).json({ success: false, error: 'Missing required feedback fields.' });
+    }
+
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        // 1. Save the feedback record
+        await Feedback.create({
+            userId: req.user.id,
+            originalText,
+            incorrectEmotion,
+            correctEmotion
+        });
+
+        // 2. Update user's emotion biases
+        // This is a simple implementation. A more advanced one might use a learning rate.
+        const BIAS_ADJUSTMENT = 0.05; // The amount to adjust bias by
+
+        // Decrease the bias for the incorrect emotion
+        const currentIncorrectBias = user.emotionBiases.get(incorrectEmotion) || 0;
+        user.emotionBiases.set(incorrectEmotion, currentIncorrectBias - BIAS_ADJUSTMENT);
+
+        // Increase the bias for the correct emotion
+        const currentCorrectBias = user.emotionBiases.get(correctEmotion) || 0;
+        user.emotionBiases.set(correctEmotion, currentCorrectBias + BIAS_ADJUSTMENT);
+
+        // Mark the map as modified for Mongoose to save it
+        user.markModified('emotionBiases');
+        await user.save();
+        
+        res.status(201).json({ success: true, message: 'Feedback received and bias updated.' });
+
+    } catch (error) {
+        console.error('Error processing feedback:', error.message);
+        res.status(500).json({ success: false, error: 'Error processing feedback.' });
+    }
+});
+
 
 module.exports = router;
