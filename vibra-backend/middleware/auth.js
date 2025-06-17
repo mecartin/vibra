@@ -1,17 +1,25 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 
-module.exports = async function (req, res, next) {
-  const authHeader = req.header('Authorization');
-  if (!authHeader) return res.status(401).json({ error: 'No token.' });
-  const token = authHeader.replace('Bearer ', '');
+module.exports = function(req, res, next) {
+    // Get token from header
+    const authHeader = req.header('Authorization');
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.id);
-    if (!req.user) return res.status(401).json({ error: 'User not found.' });
-    next();
-  } catch (err) {
-    res.status(401).json({ error: 'Token not valid.' });
-  }
+    // Check for "Bearer " token
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ msg: 'No token or invalid token format, authorization denied' });
+    }
+
+    try {
+        // Extract token from "Bearer <token>"
+        const token = authHeader.split(' ')[1];
+        
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Add user from payload
+        req.user = decoded.user;
+        next();
+    } catch (err) {
+        res.status(401).json({ msg: 'Token is not valid' });
+    }
 };

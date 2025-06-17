@@ -2,11 +2,28 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 2rem;
-    width: 100%;
+  width: 100%;
   height: 100vh;
   position: relative;
+}
+
+/* Heart icon at the top */
+.heart-icon-top {
+  position: absolute;
+  top: 2rem;
+  z-index: 10;
+  filter: drop-shadow(0 0 5px #FF00FF);
+}
+
+/* Main content wrapper */
+.main-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  width: 100%;
+  padding: 2rem;
 }
 
 .matrix-rain {
@@ -45,10 +62,33 @@
 }
 
 @media (max-width: 768px) {
+  .heart-icon-top {
+    top: 1.5rem;
+  }
+  
+  .main-content {
+    padding: 1rem;
+  }
+  
   .content-container {
     padding: 1.5rem;
     width: 90vw;
   }
+}
+
+.logo {
+  font-size: clamp(3rem, 10vw, 4rem);
+  font-weight: normal;
+  margin: 0;
+  margin-bottom: 0.5rem;
+  position: relative;
+}
+
+.tagline {
+  font-size: clamp(0.9rem, 2.5vw, 1rem);
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 2rem;
+  letter-spacing: 2px;
 }
 
 .input-display {
@@ -151,4 +191,97 @@
   font-weight: bold;
   text-shadow: 0 0 10px #00FF00;
   font-family: 'Cascadia Code', monospace;
+}
+
+/* Glitch text effect for logo */
+.glitch-text {
+  position: relative;
+  display: inline-block;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.glitch-text::before {
+  animation: glitch-1 0.5s infinite;
+  color: #00ffff;
+  z-index: -1;
+}
+
+.glitch-text::after {
+  animation: glitch-2 0.5s infinite;
+  color: #ff00ff;
+  z-index: -2;
+}
+
+@keyframes glitch-1 {
+  0%, 100% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0);
+  }
+  20% {
+    clip-path: inset(20% 0 60% 0);
+    transform: translate(-2px, 2px);
+  }
+  40% {
+    clip-path: inset(40% 0 40% 0);
+    transform: translate(2px, -2px);
+      }
+  60% {
+    clip-path: inset(60% 0 20% 0);
+    transform: translate(-2px, -2px);
+  }
+  80% {
+    clip-path: inset(80% 0 0 0);
+    transform: translate(2px, 2px);
+  }
+}
+
+@keyframes glitch-2 {
+  0%, 100% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0);
+  }
+  20% {
+    clip-path: inset(80% 0 0 0);
+    transform: translate(2px, -2px);
+  }
+  40% {
+    clip-path: inset(60% 0 20% 0);
+    transform: translate(-2px, 2px);
+  }
+  60% {
+    clip-path: inset(40% 0 40% 0);
+    transform: translate(2px, 2px);
+  }
+  80% {
+    clip-path: inset(20% 0 60% 0);
+    transform: translate(-2px, -2px);
+  }
+}
+
+/* Ensure proper spacing on very small screens */
+@media (max-height: 600px) {
+  .heart-icon-top {
+    top: 1rem;
+  }
+  
+  .main-content {
+    padding-top: 3rem;
+  }
+  
+  .content-container {
+    padding: 1rem;
+  }
+  
+  .matrix-grid {
+    max-width: 250px;
+  }
 }

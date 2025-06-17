@@ -5,6 +5,12 @@ import { ArrowLeft, X } from 'lucide-react';
 import { soundManager } from '../utils/sounds';
 import './FavoritesScreen.css';
 
+
+// Define the props for the FavoritesScreen component
+interface FavoritesScreenProps {
+  authToken: string | null;
+  onBack: () => void;
+}
 interface Favorite {
   gifUrl: string;
   sentiment: string;

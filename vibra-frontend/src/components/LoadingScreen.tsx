@@ -86,51 +86,55 @@ const LoadingScreen: React.FC = () => {
         ))}
       </div>
 
-      <div className="content-container">
-        <motion.div 
-          className="heart-icon"
-          animate={{ scale: [1, 1.1, 1] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-        >
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <path d="M20 35L17.1 32.4C8.4 24.5 3 19.6 3 13.5C3 8.4 7 4.5 12 4.5C14.8 4.5 17.5 5.9 19.1 8.1C20.7 5.9 23.4 4.5 26.2 4.5C31.2 4.5 35.2 8.5 35.2 13.5C35.2 19.6 29.8 24.5 21.1 32.4L20 35Z" 
-                  stroke="#FF00FF" 
-                  strokeWidth="2"
-                  fill="none"/>
-          </svg>
-        </motion.div>
-        
-        <h1 className="logo glitch-text" data-text="Vibra">Vibra</h1>
-        <p className="tagline">what's your vibe</p>
-        
-        <motion.div 
-          className="input-display"
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          {sessionStorage.getItem('userInput') || '/User Input/'}
-        </motion.div>
-        
-        <div className="matrix-progress-container">
-          <div className="matrix-grid">
-            {Array(20).fill(0).map((_, i) => (
-              <motion.div 
-                key={i} 
-                className={`matrix-cell ${i < Math.floor(progress / 5) ? 'active' : ''}`}
-                initial={{ scale: 0 }}
-                animate={{ scale: i < Math.floor(progress / 5) ? 1 : 0.8 }}
-                transition={{ delay: i * 0.05 }}
-              />
-            ))}
-          </div>
+      <motion.div 
+        className="heart-icon-top"
+        animate={{ scale: [1, 1.1, 1] }}
+        transition={{ duration: 1.5, repeat: Infinity }}
+        initial={{ y: -20, opacity: 0 }}
+        whileInView={{ y: 0, opacity: 1 }}
+      >
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+          <path d="M20 35L17.1 32.4C8.4 24.5 3 19.6 3 13.5C3 8.4 7 4.5 12 4.5C14.8 4.5 17.5 5.9 19.1 8.1C20.7 5.9 23.4 4.5 26.2 4.5C31.2 4.5 35.2 8.5 35.2 13.5C35.2 19.6 29.8 24.5 21.1 32.4L20 35Z" 
+                stroke="#FF00FF" 
+                strokeWidth="2"
+                fill="none"/>
+        </svg>
+      </motion.div>
+
+      <div className="main-content">
+        <div className="content-container">
+          <h1 className="logo glitch-text" data-text="Vibra">Vibra</h1>
+          <p className="tagline">what's your vibe</p>
+          
           <motion.div 
-            className="progress-text"
-            animate={{ opacity: [0.5, 1, 0.5] }}
-            transition={{ duration: 1, repeat: Infinity }}
+            className="input-display"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2 }}
           >
-            {Math.floor(progress)}%
+            {sessionStorage.getItem('userInput') || '/User Input/'}
           </motion.div>
+          
+          <div className="matrix-progress-container">
+            <div className="matrix-grid">
+              {Array(20).fill(0).map((_, i) => (
+                <motion.div 
+                  key={i} 
+                  className={`matrix-cell ${i < Math.floor(progress / 5) ? 'active' : ''}`}
+                  initial={{ scale: 0 }}
+                  animate={{ scale: i < Math.floor(progress / 5) ? 1 : 0.8 }}
+                  transition={{ delay: i * 0.05 }}
+                />
+              ))}
+            </div>
+            <motion.div 
+              className="progress-text"
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 1, repeat: Infinity }}
+            >
+              {Math.floor(progress)}%
+            </motion.div>
+          </div>
         </div>
       </div>
     </motion.div>

@@ -19,6 +19,8 @@ venv/
 .venv/
 /vibra-backend/venv/
 /vibra-backend/.venv/
+/vibra-backend/myenv/
+/vibra-backend/.myenv/
 /vibra-frontend/venv/
 /vibra-frontend/.venv/
 

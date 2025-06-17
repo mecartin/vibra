@@ -1,445 +1,346 @@
 // PlaylistScreen.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Music, Shuffle, Check, ExternalLink, Disc3, Sparkles, Volume2, Heart } from 'lucide-react';
-import { getSpotifyRecommendations, createSpotifyPlaylist } from '../utils/api';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Music, Shuffle } from 'lucide-react';
 import { soundManager } from '../utils/sounds';
-import { triggerConfetti } from '../utils/confetti';
+import { getSpotifyRecommendations, createSpotifyPlaylist } from '../utils/api';
 import './PlaylistScreen.css';
+import { checkSpotifyStatus, initiateSpotifyLogin } from '../utils/api';
+import { useSearchParams } from 'react-router-dom';
 
 interface Track {
   uri: string;
   name: string;
   artist: string;
   albumArt?: string;
-  preview_url?: string;
 }
 
-interface PlaylistScreenProps {
-  mood: string;
-  userInput: string;
-  onBack: () => void;
-}
-
-const moodColors: { [key: string]: string } = {
-  happy: '#FFD700',
-  sad: '#4169E1',
-  angry: '#FF0000',
-  anxious: '#FF6347',
-  excited: '#00FF00',
-  calm: '#00CED1',
-  melancholic: '#9370DB',
-  contemplative: '#DDA0DD',
-  mysterious: '#4B0082',
-  default: '#0000FF'
-};
-
-const PlaylistScreen: React.FC<PlaylistScreenProps> = ({ mood, userInput, onBack }) => {
+const PlaylistScreen: React.FC = () => {
+  const [mood, setMood] = useState('');
+  const [userInput, setUserInput] = useState('');
+  const [trackCount, setTrackCount] = useState(25);
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [shuffling, setShuffling] = useState(false);
+  const [creatingPlaylist, setCreatingPlaylist] = useState(false);
   const [error, setError] = useState('');
-  const [playlistName, setPlaylistName] = useState(`${mood} vibes ~ ${userInput.substring(0, 30)}`);
-  const [trackCount, setTrackCount] = useState(20);
-  const [isCreating, setIsCreating] = useState(false);
-  const [createdPlaylistUrl, setCreatedPlaylistUrl] = useState('');
-  const [selectedTrack, setSelectedTrack] = useState<string | null>(null);
-  const [removedTracks, setRemovedTracks] = useState<string[]>([]);
-  const [playingPreview, setPlayingPreview] = useState<string | null>(null);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [playlistUrl, setPlaylistUrl] = useState('');
+  const navigate = useNavigate();
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [checkingConnection, setCheckingConnection] = useState(true);
+  const [searchParams] = useSearchParams();
 
-  const bgColor = moodColors[mood] || moodColors.default;
+  useEffect(() => {
+    const storedMood = sessionStorage.getItem('playlistMood') || 'neutral';
+    const storedInput = sessionStorage.getItem('playlistUserInput') || '';
+    setMood(storedMood);
+    setUserInput(storedInput);
+    checkSpotifyConnection();
+  const spotifyStatus = searchParams.get('spotify');
+    const error = searchParams.get('error');
+    
+    if (spotifyStatus === 'connected') {
+      setSpotifyConnected(true);
+      soundManager.play('success');
+      // Clean up URL
+      window.history.replaceState({}, document.title, '/playlist');
+    } else if (error) {
+      setError('Failed to connect Spotify. Please try again.');
+      // Clean up URL
+      window.history.replaceState({}, document.title, '/playlist');
+    }
+    
+    checkSpotifyConnection();
+  }, [searchParams]);
 
-  const fetchRecommendations = useCallback(async () => {
-    setLoading(true);
+  const handleBack = () => {
+    soundManager.play('hover');
+    navigate('/result');
+  };
+
+  const handleShuffleVibes = async () => {
+    
+    setShuffling(true);
     setError('');
-    soundManager.play('loading');
+    soundManager.play('hover');
     
     try {
-      const data = await getSpotifyRecommendations(mood, trackCount, userInput);
-      if (data.success) {
-        setTracks(data.tracks);
-        soundManager.play('success');
+      const response = await getSpotifyRecommendations(mood, trackCount, userInput);
+      if (response.success) {
+        setTracks(response.tracks);
+        
+        // Animate the shuffle effect
+        setTimeout(() => {
+          setShuffling(false);
+        }, 1000);
       } else {
-        setError('Could not tune into your vibe frequency. Try again?');
-        soundManager.play('error');
+        setError('Failed to fetch tracks');
+        setShuffling(false);
       }
     } catch (err) {
-      setError('Lost connection to the vibe dimension.');
-      soundManager.play('error');
-    } finally {
-      setLoading(false);
+      setError('Please connect your Spotify account first');
+      setShuffling(false);
     }
-  }, [mood, trackCount, userInput]);
-
-  useEffect(() => {
-    fetchRecommendations();
-  }, [fetchRecommendations]);
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (audioElement) {
-        audioElement.pause();
-        audioElement.src = '';
-      }
-    };
-  }, [audioElement]);
+  };
 
   const handleCreatePlaylist = async () => {
-    if (!playlistName || tracks.length === 0) return;
-    
-    setIsCreating(true);
+    if (tracks.length === 0) {
+      await handleShuffleVibes();
+      return;
+    }
+
+    setCreatingPlaylist(true);
     setError('');
-    soundManager.play('click');
+    soundManager.play('hover');
     
     try {
-      const filteredTracks = tracks.filter(t => !removedTracks.includes(t.uri));
-      const trackUris = filteredTracks.map(t => t.uri);
-      const data = await createSpotifyPlaylist(playlistName, trackUris);
+      const playlistName = `vibra ${mood} - ${userInput || 'vibes'}`;
+      const trackUris = tracks.slice(0, trackCount).map(track => track.uri);
+      const response = await createSpotifyPlaylist(playlistName, trackUris);
       
-      if (data.success) {
-        setCreatedPlaylistUrl(data.url);
+      if (response.success) {
+        setPlaylistUrl(response.url);
         soundManager.play('success');
-        triggerConfetti();
+        
+        // Open Spotify in new tab
+        window.open(response.url, '_blank');
       } else {
-        setError('The vibe gods are not pleased. Try again.');
-        soundManager.play('error');
+        setError('Failed to create playlist');
       }
     } catch (err) {
-      setError('A glitch in the matrix occurred.');
-      soundManager.play('error');
+      setError('Error creating playlist. Please try again.');
     } finally {
-      setIsCreating(false);
+      setCreatingPlaylist(false);
     }
   };
-
-  const handleTrackToggle = (trackUri: string) => {
-    soundManager.play('hover');
-    if (removedTracks.includes(trackUri)) {
-      setRemovedTracks(removedTracks.filter(uri => uri !== trackUri));
-    } else {
-      setRemovedTracks([...removedTracks, trackUri]);
-    }
-  };
-
-  const handlePlayPreview = (track: Track) => {
-    if (!track.preview_url) return;
-
-    if (playingPreview === track.uri) {
-      // Stop playing
-      if (audioElement) {
-        audioElement.pause();
-        audioElement.src = '';
-      }
-      setPlayingPreview(null);
-    } else {
-      // Start playing new track
-      if (audioElement) {
-        audioElement.pause();
-      }
-      
-      const audio = new Audio(track.preview_url);
-      audio.volume = 0.5;
-      audio.play();
-      
-      audio.addEventListener('ended', () => {
-        setPlayingPreview(null);
-      });
-      
-      setAudioElement(audio);
-      setPlayingPreview(track.uri);
-      soundManager.play('hover');
-    }
-  };
-
-  const navigateToFavorites = () => {
-    soundManager.play('hover');
-    onBack();
-  };
-
-  if (createdPlaylistUrl) {
-    return (
-      <motion.div 
-        className="playlist-screen success-screen"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        style={{ backgroundColor: bgColor }}
-      >
-        <div className="cyber-grid"></div>
-        <div className="holographic-overlay"></div>
-        <div className="vhs-distortion"></div>
-        
-        <motion.div 
-          className="playlist-success"
-          initial={{ scale: 0, rotate: -180 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", damping: 10 }}
-        >
-          <motion.div
-            className="success-icon"
-            animate={{ 
-              rotate: [0, 360],
-              scale: [1, 1.2, 1]
-            }}
-            transition={{ 
-              duration: 2,
-              repeat: Infinity,
-              repeatType: "reverse"
-            }}
-          >
-            <Sparkles size={80} color="#00FF00" />
-          </motion.div>
-          
-          <h2 className="glitch-text" data-text="Playlist Created!">
-            Playlist Created!
-          </h2>
-          <p className="success-message">Your vibe has been immortalized in the Spotify realm</p>
-          
-          <motion.a 
-            href={createdPlaylistUrl} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="spotify-button primary"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onHoverStart={() => soundManager.play('hover')}
-          >
-            <ExternalLink size={20} />
-            <span>Launch in Spotify</span>
-          </motion.a>
-          
-          <motion.button 
-            onClick={onBack} 
-            className="back-to-vibe"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onHoverStart={() => soundManager.play('hover')}
-          >
-            Return to the Vibe
-          </motion.button>
-        </motion.div>
-      </motion.div>
-    );
+  const checkSpotifyConnection = async () => {
+  try {
+    const status = await checkSpotifyStatus();
+    setSpotifyConnected(status.connected);
+  } catch (error) {
+    console.error('Failed to check Spotify status:', error);
+  } finally {
+    setCheckingConnection(false);
   }
+};
+
+  const moodGradients: { [key: string]: string } = {
+    happy: 'linear-gradient(180deg, #FFD700 0%, #FF6B6B 100%)',
+    sad: 'linear-gradient(180deg, #4169E1 0%, #1E3A8A 100%)',
+    angry: 'linear-gradient(180deg, #FF0000 0%, #8B0000 100%)',
+    anxious: 'linear-gradient(180deg, #FF6347 0%, #DC143C 100%)',
+    excited: 'linear-gradient(180deg, #00FF00 0%, #00AA00 100%)',
+    calm: 'linear-gradient(180deg, #00CED1 0%, #008B8B 100%)',
+    melancholic: 'linear-gradient(180deg, #9370DB 0%, #4B0082 100%)',
+    contemplative: 'linear-gradient(180deg, #DDA0DD 0%, #8B008B 100%)',
+    mysterious: 'linear-gradient(180deg, #4B0082 0%, #000000 100%)',
+    default: 'linear-gradient(180deg, #00FF00 0%, #000000 100%)'
+  };
+
+  const bgGradient = moodGradients[mood] || moodGradients.default;
 
   return (
-    <motion.div 
-      className="playlist-screen"
+    <motion.div
+      className="playlist-vibra-screen"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      style={{ backgroundColor: bgColor }}
+      exit={{ opacity: 0 }}
+      style={{ background: bgGradient }}
     >
-      <div className="cyber-grid"></div>
-      <div className="holographic-overlay"></div>
-      <div className="vhs-distortion"></div>
+      {/* Background Effects */}
+      <div className="vibra-noise"></div>
+      <div className="vibra-scan-lines"></div>
+      <div className="vibra-glow-orb"></div>
       
-      <motion.div 
-        className="heart-icon"
-        whileHover={{ scale: 1.1, rotate: 5 }}
+      {/* Back Button */}
+      <motion.button
+        className="vibra-back-btn"
+        onClick={handleBack}
+        whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
-        onClick={navigateToFavorites}
         onHoverStart={() => soundManager.play('hover')}
       >
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-          <path d="M20 35L17.1 32.4C8.4 24.5 3 19.6 3 13.5C3 8.4 7 4.5 12 4.5C14.8 4.5 17.5 5.9 19.1 8.1C20.7 5.9 23.4 4.5 26.2 4.5C31.2 4.5 35.2 8.5 35.2 13.5C35.2 19.6 29.8 24.5 21.1 32.4L20 35Z" 
-                stroke="#FF00FF" 
-                strokeWidth="2"
-                fill="none"/>
-        </svg>
-      </motion.div>
+        <ArrowLeft size={24} />
+      </motion.button>
 
-      <div className="content-wrapper">
-        <motion.h1 
-          className="logo glitch-text"
-          data-text="Vibra"
-          initial={{ y: -50, opacity: 0 }}
+      {/* Main Content */}
+      <div className="vibra-content">
+        <motion.div
+          className="vibra-logo-section"
+          initial={{ y: -30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          onClick={onBack}
-          style={{ cursor: 'pointer' }}
-          whileHover={{ scale: 1.05 }}
-          onHoverStart={() => soundManager.play('hover')}
+          transition={{ delay: 0.2, type: "spring" }}
         >
-          Vibra
-        </motion.h1>
-        <p className="tagline">curate your frequency</p>
-
-        <motion.div 
-          className="playlist-header"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <div className="playlist-controls">
-            <div className="input-wrapper">
-              <input
-                type="text"
-                value={playlistName}
-                onChange={(e) => setPlaylistName(e.target.value)}
-                placeholder="Name your vibe..."
-                className="playlist-name-input"
-                onFocus={() => soundManager.play('hover')}
-              />
-              <div className="input-glow"></div>
-            </div>
-
-            <div className="slider-container">
-              <label className="slider-label">
-                <Music size={16} />
-                <span>Tracks: {trackCount}</span>
-              </label>
-              <div className="slider-wrapper">
-                <input
-                  type="range"
-                  min="10"
-                  max="50"
-                  value={trackCount}
-                  onChange={(e) => setTrackCount(Number(e.target.value))}
-                  onMouseUp={() => fetchRecommendations()}
-                  className="vibe-slider"
-                  placeholder="Select number of tracks"
-                  title="Select number of tracks"
-                />
-                <div className="slider-fill" style={{ width: `${((trackCount - 10) / 40) * 100}%` }}></div>
-              </div>
-            </div>
-
-            <motion.button
-              className="shuffle-button"
-              onClick={fetchRecommendations}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              disabled={loading}
-              onHoverStart={() => soundManager.play('hover')}
-            >
-              <Shuffle size={20} />
-              <span>Shuffle Vibes</span>
-            </motion.button>
+          <div className="vibra-logo">
+            <Music size={60} className="vibra-logo-icon" />
           </div>
+          <h1 className="vibra-brand">vibra</h1>
+          <p className="vibra-tagline">what's your vibe</p>
         </motion.div>
 
-        <AnimatePresence mode="wait">
-          {loading ? (
-            <motion.div 
-              key="loader"
-              className="loader-container"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+        <motion.div
+          className="vibra-controls"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.4 }}
+        >
+          <div className="vibra-input-display">
+            <p className="vibra-mood-label">curate your frequency</p>
+            <div className="vibra-user-input">
+              <span className="mood-badge">{mood}</span>
+              <span className="user-text">{userInput || "pure vibes"}</span>
+            </div>
+          </div>
+
+          {/* Track Count Slider */}
+          <div className="vibra-slider-container">
+            <div className="slider-header">
+              <Music size={20} />
+              <span>tracks: {trackCount}</span>
+            </div>
+            <div className="slider-wrapper">
+              <span className="slider-min">10</span>
+              <input
+                type="range"
+                min="10"
+                max="50"
+                value={trackCount}
+                onChange={(e) => setTrackCount(Number(e.target.value))}
+                className="vibra-slider"
+              />
+              <span className="slider-max">50</span>
+            </div>
+            <div className="slider-track-fill" style={{ width: `${((trackCount - 10) / 40) * 100}%` }}></div>
+          </div>
+
+          {/* Shuffle Button */}
+          <motion.button
+            className="vibra-shuffle-btn"
+            onClick={handleShuffleVibes}
+            disabled={shuffling}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <AnimatePresence mode="wait">
+              {shuffling ? (
+                <motion.div
+                  key="shuffling"
+                  initial={{ opacity: 0, rotate: 0 }}
+                  animate={{ opacity: 1, rotate: 360 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ rotate: { duration: 1, repeat: Infinity, ease: "linear" } }}
+                >
+                  <Shuffle size={24} />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="shuffle"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="shuffle-content"
+                >
+                  <Shuffle size={24} />
+                  <span>shuffle vibes</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.button>
+
+          {/* Create Playlist Button */}
+          <motion.button
+            className="vibra-create-btn"
+            onClick={handleCreatePlaylist}
+            disabled={creatingPlaylist}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            animate={{
+              boxShadow: creatingPlaylist 
+                ? ['0 0 30px rgba(0, 0, 0, 0.5)', '0 0 50px rgba(0, 0, 0, 0.8)']
+                : '0 0 20px rgba(0, 0, 0, 0.3)'
+            }}
+          >
+            <Music size={24} />
+            <span>{creatingPlaylist ? 'creating...' : 'create playlist on spotify'}</span>
+          </motion.button>
+
+          {/* Track Preview */}
+          {tracks.length > 0 && (
+            <motion.div
+              className="vibra-track-preview"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
             >
-              <div className="vibe-loader">
-                <Disc3 className="spinning-disc" size={60} />
-                                <p>Tuning into your frequency...</p>
-              </div>
-            </motion.div>
-          ) : error ? (
-            <motion.div 
-              key="error"
-              className="error-container"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-            >
-              <p className="error-message">{error}</p>
-            </motion.div>
-          ) : (
-            <motion.div 
-              key="tracks"
-              className="track-list-container"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <div className="track-list">
-                {tracks.map((track, index) => (
+              <p className="preview-label">{tracks.length} tracks ready</p>
+              <div className="track-dots">
+                {tracks.slice(0, 5).map((_, index) => (
                   <motion.div
-                    key={track.uri}
-                    className={`track-item ${removedTracks.includes(track.uri) ? 'removed' : ''}`}
-                    initial={{ opacity: 0, x: -50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.02 }}
-                    whileHover={{ x: 10 }}
-                    onHoverStart={() => soundManager.play('hover')}
-                  >
-                    <div className="track-number">{index + 1}</div>
-                    
-                    <div className="track-album-art">
-                      <img 
-                        src={track.albumArt || '/placeholder-album.png'} 
-                        alt={track.name}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/placeholder-album.png';
-                        }}
-                      />
-                      <div className="album-overlay">
-                        <div className="scan-line"></div>
-                      </div>
-                    </div>
-
-                    <div className="track-info">
-                      <h4 className="track-name">{track.name}</h4>
-                      <p className="track-artist">{track.artist}</p>
-                    </div>
-
-                    <div className="track-actions">
-                      {track.preview_url && (
-                        <motion.button
-                          className={`preview-button ${playingPreview === track.uri ? 'playing' : ''}`}
-                          onClick={() => handlePlayPreview(track)}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                        >
-                          <Volume2 size={16} className={playingPreview === track.uri ? 'pulse' : ''} />
-                        </motion.button>
-                      )}
-                      
-                      <motion.button
-                        className={`toggle-button ${removedTracks.includes(track.uri) ? 'removed' : ''}`}
-                        onClick={() => handleTrackToggle(track.uri)}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                      >
-                        <Check size={16} />
-                      </motion.button>
-                    </div>
-                  </motion.div>
+                    key={index}
+                    className="track-dot"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: index * 0.1 }}
+                  />
                 ))}
-              </div>
-              
-              <div className="track-count-info">
-                {tracks.length - removedTracks.length} tracks selected
+                {tracks.length > 5 && <span className="more-tracks">+{tracks.length - 5}</span>}
               </div>
             </motion.div>
           )}
-        </AnimatePresence>
 
-        <motion.div 
-          className="create-playlist-section"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <motion.button
-            className="spotify-button create-button"
-            onClick={handleCreatePlaylist}
-            disabled={loading || isCreating || tracks.length === removedTracks.length}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onHoverStart={() => soundManager.play('hover')}
-          >
-            {isCreating ? (
-              <>
-                <Disc3 className="spinning-disc" size={20} />
-                <span>Creating your vibe...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={20} />
-                <span>Create Playlist on Spotify</span>
-              </>
-            )}
-          </motion.button>
+          {/* Error Message */}
+          {error && (
+            <motion.div
+              className="vibra-error"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <p>{error}</p>
+              {error.includes('connect') && (
+                <a href="/api/spotify/login" className="spotify-connect-link">
+                  Connect Spotify →
+                </a>
+              )}
+            </motion.div>
+          )}
+
+          {/* Success State */}
+          {playlistUrl && (
+            <motion.div
+              className="vibra-success"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              <p>✨ Playlist created!</p>
+            </motion.div>
+          )}
         </motion.div>
       </div>
+
+      {/* Animated Background Elements */}
+      <div className="vibra-particles">
+        {[...Array(20)].map((_, i) => (
+          <motion.div
+            key={i}
+            className="particle"
+            initial={{ 
+              x: Math.random() * window.innerWidth,
+              y: window.innerHeight + 50
+            }}
+            animate={{ 
+              y: -50,
+              x: Math.random() * window.innerWidth
+            }}
+            transition={{
+              duration: Math.random() * 10 + 10,
+              repeat: Infinity,
+              ease: "linear",
+              delay: Math.random() * 5
+            }}
+          />
+        ))}
+        
+      </div>
+    
     </motion.div>
   );
 };

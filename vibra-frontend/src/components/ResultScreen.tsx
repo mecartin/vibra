@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Share2, Heart, Download, MessageSquare, X , Music } from 'lucide-react';
+import { Share2, Heart, Music, MessageSquare, X } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { triggerConfetti, triggerHeartConfetti } from '../utils/confetti';
 import { useTransition } from '../contexts/TransitionContext';
@@ -29,10 +29,8 @@ const moodColors: { [key: string]: string } = {
   default: '#0000FF'
 };
 
-// Master emotions for feedback
 const MASTER_EMOTIONS = ['happy', 'sad', 'angry', 'anxious', 'excited', 'calm', 'neutral'];
 
-// Emoji mapping for emotions
 const EMOTION_EMOJIS: { [key: string]: string } = {
   happy: '😊',
   sad: '😢',
@@ -51,7 +49,7 @@ const ResultScreen: React.FC = () => {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const navigate = useNavigate();
-  const { matrixSymbols, resultEmoji, isTransitioning } = useTransition();
+  const { resultEmoji, isTransitioning } = useTransition();
 
   useEffect(() => {
     const data = sessionStorage.getItem('vibeData');
@@ -59,13 +57,11 @@ const ResultScreen: React.FC = () => {
       const parsed = JSON.parse(data);
       setVibeData(parsed);
       
-      // Show emoji rain if transitioning
       if (isTransitioning) {
         setShowEmojiRain(true);
         setTimeout(() => setShowEmojiRain(false), 3000);
       }
       
-      // Animate background color change
       const color = moodColors[parsed.mood] || moodColors.default;
       setTimeout(() => {
         setBgColor(color);
@@ -73,18 +69,23 @@ const ResultScreen: React.FC = () => {
         triggerConfetti();
       }, 500);
     }
-  }, [isTransitioning]);
+  }, [isTransitioning, resultEmoji]);
 
   const createMoodCard = async () => {
     const moodCard = document.getElementById('mood-card');
     if (moodCard) {
+      // Update the mood card background to match current mood
+      const moodCardContent = moodCard.querySelector('.mood-card-content') as HTMLElement;
+      if (moodCardContent) {
+        moodCardContent.style.background = `linear-gradient(135deg, ${bgColor}dd 0%, ${bgColor}99 100%)`;
+      }
+      
       moodCard.style.display = 'block';
       const canvas = await html2canvas(moodCard, {
-        backgroundColor: bgColor,
-        scale: 2,
+        background: bgColor,
         logging: false,
         useCORS: true
-      } as any);
+      });
       moodCard.style.display = 'none';
       return canvas;
     }
@@ -94,27 +95,23 @@ const ResultScreen: React.FC = () => {
   const handleShare = async () => {
     soundManager.play('hover');
     const canvas = await createMoodCard();
-    if (canvas) {
+    if (canvas && navigator.share) {
       canvas.toBlob((blob) => {
         if (blob) {
           const file = new File([blob], 'vibra-mood.png', { type: 'image/png' });
-          
-          if (navigator.share) {
-            navigator.share({
-              files: [file],
-              title: 'My Vibe',
-              text: `Feeling ${vibeData?.mood || 'vibes'} - via Vibra`
-            });
-          } else {
-            handleDownload();
-          }
+          navigator.share({
+            files: [file],
+            title: 'My Vibe',
+            text: `Feeling ${vibeData?.mood || 'vibes'} - via Vibra`
+          }).catch(console.error);
         }
       });
+    } else if (canvas) {
+      handleDownload();
     }
   };
 
   const handleDownload = async () => {
-    soundManager.play('hover');
     const canvas = await createMoodCard();
     if (canvas) {
       const url = canvas.toDataURL('image/jpeg', 0.9);
@@ -126,7 +123,7 @@ const ResultScreen: React.FC = () => {
   };
 
   const handleFavorite = () => {
-    if (vibeData) {
+    if (vibeData && !isFavorited) {
       soundManager.play('favorite');
       const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
       const newFavorite = {
@@ -141,11 +138,17 @@ const ResultScreen: React.FC = () => {
     }
   };
 
+  const handleCreatePlaylist = () => {
+    soundManager.play('hover');
+    sessionStorage.setItem('playlistMood', vibeData?.mood || 'neutral');
+    sessionStorage.setItem('playlistUserInput', sessionStorage.getItem('userInput') || '');
+    navigate('/playlist');
+  };
+
   const handleFeedbackSubmit = async (correctEmotion: string) => {
     try {
-      soundManager.play('click');
+      soundManager.play('hover');
       
-      // Submit feedback to API
       const response = await fetch('/api/submit-feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -162,7 +165,6 @@ const ResultScreen: React.FC = () => {
         setShowFeedback(false);
         soundManager.play('success');
         
-        // Update the current vibe data with correct emotion
         if (vibeData) {
           const updatedVibeData = {
             ...vibeData,
@@ -172,14 +174,12 @@ const ResultScreen: React.FC = () => {
           setVibeData(updatedVibeData);
           sessionStorage.setItem('vibeData', JSON.stringify(updatedVibeData));
           
-          // Update background color
           const newColor = moodColors[correctEmotion] || moodColors.default;
           setBgColor(newColor);
         }
       }
     } catch (error) {
       console.error("Failed to submit feedback", error);
-      // Could add error toast notification here
     }
   };
 
@@ -188,18 +188,15 @@ const ResultScreen: React.FC = () => {
     in: { opacity: 1, scale: 1 },
     out: { opacity: 0, scale: 0.9 }
   };
-  const handleCreatePlaylist = () => {
-    soundManager.play('click');
-    // Store current mood and input for playlist screen
-    sessionStorage.setItem('playlistMood', vibeData?.mood || 'neutral');
-    sessionStorage.setItem('playlistUserInput', sessionStorage.getItem('userInput') || '');
-    navigate('/playlist');
-  };
-  // Generate evenly distributed emoji positions
-  const emojiPositions = Array(30).fill(0).map((_, i) => ({
+
+  // Generate evenly distributed emoji positions across the entire screen
+  const rows = 6;
+  const cols = 8;
+  const emojiPositions = Array(rows * cols).fill(0).map((_, i) => ({
     id: i,
-    x: (i % 6) * (100 / 6) + Math.random() * (100 / 6),
-    delay: Math.floor(i / 6) * 0.2 + Math.random() * 0.2
+    x: ((i % cols) / cols) * 100 + (Math.random() - 0.5) * 10,
+    y: Math.floor(i / cols) * (100 / rows),
+    delay: (Math.floor(i / cols) * 0.1) + (Math.random() * 0.2)
   }));
 
   return (
@@ -215,7 +212,7 @@ const ResultScreen: React.FC = () => {
       <div className="holographic-overlay"></div>
       <div className="vhs-distortion"></div>
       
-      {/* Emoji Rain Transition - More Evenly Distributed */}
+      {/* Emoji Rain Transition - Uniform Distribution */}
       <AnimatePresence>
         {showEmojiRain && (
           <div className="emoji-rain">
@@ -232,52 +229,67 @@ const ResultScreen: React.FC = () => {
                 animate={{ 
                   y: window.innerHeight + 100,
                   opacity: [0, 1, 1, 0],
-                  scale: [0, 1, 1, 0.5],
-                  rotate: Math.random() * 360
+                  scale: [0, 1.2, 1.2, 0.5],
+                  rotate: [0, 360]
                 }}
                 exit={{ opacity: 0 }}
                 transition={{
-                  duration: 2 + Math.random(),
+                  duration: 2.5,
                   delay: pos.delay,
-                  ease: "easeIn"
+                  ease: "easeIn",
+                  rotate: {
+                    duration: 2.5,
+                    ease: "linear"
+                  }
                 }}
                 style={{
                   position: 'fixed',
-                  fontSize: `${20 + Math.random() * 20}px`,
-                  zIndex: 100
+                  fontSize: '30px',
+                  zIndex: 100,
+                  filter: 'drop-shadow(0 0 10px currentColor)'
                 }}
               >
-                {resultEmoji}
+                {resultEmoji || vibeData?.emoji || '✨'}
               </motion.div>
             ))}
           </div>
         )}
       </AnimatePresence>
 
+      {/* Heart icon at top - links to favorites */}
+      <motion.div 
+        className="heart-icon-top"
+        whileHover={{ scale: 1.1, rotate: 5 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={() => {
+          soundManager.play('hover');
+          navigate('/favorites');
+        }}
+        onHoverStart={() => soundManager.play('hover')}
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+      >
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+          <path d="M20 35L17.1 32.4C8.4 24.5 3 19.6 3 13.5C3 8.4 7 4.5 12 4.5C14.8 4.5 17.5 5.9 19.1 8.1C20.7 5.9 23.4 4.5 26.2 4.5C31.2 4.5 35.2 8.5 35.2 13.5C35.2 19.6 29.8 24.5 21.1 32.4L20 35Z" 
+                stroke="#FF00FF" 
+                strokeWidth="2"
+                fill="none"/>
+        </svg>
+      </motion.div>
+
       <div className="content-wrapper">
-        <motion.div 
-          className="heart-icon"
-          whileHover={{ scale: 1.1, rotate: 5 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => {
-            soundManager.play('hover');
-            navigate('/favorites');
-          }}
-          onHoverStart={() => soundManager.play('hover')}
-        >
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <path d="M20 35L17.1 32.4C8.4 24.5 3 19.6 3 13.5C3 8.4 7 4.5 12 4.5C14.8 4.5 17.5 5.9 19.1 8.1C20.7 5.9 23.4 4.5 26.2 4.5C31.2 4.5 35.2 8.5 35.2 13.5C35.2 19.6 29.8 24.5 21.1 32.4L20 35Z" 
-                  stroke="#FF00FF" 
-                  strokeWidth="2"
-                  fill="none"/>
-          </svg>
-        </motion.div>
-        
+        {/* Logo links to input screen */}
         <motion.h1 
           className="logo glitch-text"
           data-text="Vibra"
           initial={{ y: -50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
+          whileHover={{ scale: 1.05 }}
+          onClick={() => {
+            soundManager.play('hover');
+            navigate('/');
+          }}
+          style={{ cursor: 'pointer' }}
         >
           Vibra
         </motion.h1>
@@ -289,14 +301,15 @@ const ResultScreen: React.FC = () => {
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}
         >
-          {sessionStorage.getItem('userInput') || '/User Input/'}
+        {sessionStorage.getItem('userInput') || '/User Input/'}
         </motion.div>
         
         <motion.div 
           className="emoji"
           initial={{ scale: 0, rotate: -180 }}
           animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", delay: 0.4 }}
+          transition={{ type: "spring", delay: 0.4, damping: 10 }}
+          whileHover={{ scale: 1.1, rotate: [0, -10, 10, -10, 0] }}
         >
           {vibeData?.emoji || '😭'}
         </motion.div>
@@ -322,65 +335,83 @@ const ResultScreen: React.FC = () => {
         <motion.div 
           className="gif-container"
           initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
+          animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 1 }}
+          whileHover={{ scale: 1.02 }}
         >
+          <div className="gif-box-label">GIF BOX</div>
           <img src={vibeData?.gifUrl || 'https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif'} alt="Mood GIF" />
           <div className="gif-overlay">
             <div className="scan-effect"></div>
           </div>
         </motion.div>
-        
+
+        {/* All Four Action Buttons in 2x2 Grid */}
         <motion.div 
-          className="spotify-section"
+          className="all-buttons-grid"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.3 }}
+          transition={{ delay: 1.1 }}
         >
           <motion.button 
-            className="spotify-playlist-button"
-            onClick={handleCreatePlaylist}
-            whileHover={{ scale: 1.05 }}
+            className="grid-button share-button"
+            onClick={handleShare}
+            whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(0, 255, 0, 0.5)' }}
             whileTap={{ scale: 0.95 }}
             onHoverStart={() => soundManager.play('hover')}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 1.2 }}
+          >
+            <Share2 size={20} />
+            <span>Share</span>
+          </motion.button>
+          
+          <motion.button 
+            className={`grid-button favorite-button ${isFavorited ? 'favorited' : ''}`}
+            onClick={handleFavorite}
+            whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(255, 0, 255, 0.5)' }}
+            whileTap={{ scale: 0.95 }}
+            disabled={isFavorited}
+            onHoverStart={() => soundManager.play('hover')}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 1.3 }}
+          >
+            <Heart size={20} fill={isFavorited ? '#FF00FF' : 'none'} />
+            <span>{isFavorited ? 'Saved' : 'Favorite'}</span>
+          </motion.button>
+
+          <motion.button 
+            className="grid-button feedback-button"
+            onClick={() => {
+              setShowFeedback(true);
+              soundManager.play('hover');
+            }}
+            whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(255, 99, 71, 0.5)' }}
+            whileTap={{ scale: 0.95 }}
+            onHoverStart={() => soundManager.play('hover')}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 1.4 }}
+          >
+            <MessageSquare size={20} />
+            <span>not your vibe?</span>
+          </motion.button>
+
+          <motion.button 
+            className="grid-button playlist-button"
+            onClick={handleCreatePlaylist}
+            whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(29, 185, 84, 0.5)' }}
+            whileTap={{ scale: 0.95 }}
+            onHoverStart={() => soundManager.play('hover')}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 1.5 }}
           >
             <Music size={20} />
-            <span>Create Spotify Playlist</span>
+            <span>create playlist</span>
           </motion.button>
-        </motion.div>
-
-        {/* Feedback Section */}
-        <motion.div 
-          className="feedback-section"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.4 }}
-        >
-          {!showFeedback && !feedbackSubmitted && (
-            <motion.button 
-              className="feedback-toggle"
-              onClick={() => {
-                setShowFeedback(true);
-                soundManager.play('hover');
-              }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onHoverStart={() => soundManager.play('hover')}
-            >
-              <MessageSquare size={16} />
-              <span>Wrong vibe?</span>
-            </motion.button>
-          )}
-
-          {feedbackSubmitted && (
-            <motion.p 
-              className="feedback-thanks"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              ✨ Thanks for helping us vibe better!
-            </motion.p>
-          )}
         </motion.div>
       </div>
 
@@ -396,9 +427,10 @@ const ResultScreen: React.FC = () => {
           >
             <motion.div 
               className="feedback-modal"
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
+              initial={{ scale: 0.8, opacity: 0, rotate: -10 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              exit={{ scale: 0.8, opacity: 0, rotate: 10 }}
+              transition={{ type: "spring", damping: 15 }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="feedback-header">
@@ -424,15 +456,16 @@ const ResultScreen: React.FC = () => {
                     key={emotion}
                     className="emotion-choice"
                     onClick={() => handleFeedbackSubmit(emotion)}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, y: 20, scale: 0.8 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ delay: index * 0.05 }}
                     whileHover={{ 
-                      scale: 1.05,
+                      scale: 1.1,
                       backgroundColor: moodColors[emotion] || moodColors.default,
-                      color: '#000'
+                      color: '#000',
+                      boxShadow: `0 0 20px ${moodColors[emotion] || moodColors.default}`
                     }}
-                    whileTap={{ scale: 0.95 }}
+                    whileTap={{ scale: 0.9 }}
                     onHoverStart={() => soundManager.play('hover')}
                   >
                     <span className="emotion-emoji">{EMOTION_EMOJIS[emotion]}</span>
